@@ -1,0 +1,86 @@
+I want to develop a professional mobile application using Flutter and Firebase for recruiting plumbers and electricians.
+
+The application should allow customers to find and book plumbers or electricians in their city using Google Maps. The entire system must be built using Firebase as backend.
+
+Tech Stack:
+- Flutter (Frontend)
+- Firebase Authentication
+- Cloud Firestore
+- Firebase Cloud Functions
+- Firebase Storage
+- Firebase Cloud Messaging
+- Google Maps API
+- Razorpay Payment Gateway
+
+App Requirements:
+
+1. User Roles:
+- Customer
+- Service Provider (Plumber / Electrician)
+
+2. Authentication:
+- Email/Password login
+- Phone OTP login
+- Store user role in Firestore
+- Secure role-based access
+
+3. Customer Features:
+- Detect current location using Google Maps
+- Show nearby providers on map
+- Filter by city and service type
+- View provider profile (experience, rating, price)
+- Select date and time slot
+- Book service
+- Make secure payment via Razorpay
+- Track booking status in real-time
+- Leave rating and review after service
+
+4. Service Provider Features:
+- Create profile with:
+  - Experience
+  - Service type
+  - Price
+  - City
+  - ID verification upload
+- Update live location
+- Set availability
+- Accept or reject job requests
+- View job history
+- Receive push notifications
+
+5. Payment Flow:
+- Use Razorpay SDK in Flutter
+- Payment order must be created via Firebase Cloud Function
+- Payment signature must be verified inside Cloud Function
+- Booking status should update only after successful verification
+
+6. Real-Time Features:
+- Booking status updates
+- Live provider location tracking
+- In-app chat between customer and provider
+
+7. Firestore Database Structure:
+Include collections:
+- users
+- providers
+- services
+- bookings
+- payments
+- reviews
+- availability
+
+8. Security:
+- Firestore security rules
+- Only booking participants can access booking
+- Providers can update only their profile
+- Payment verification must not be done in frontend
+
+9. Architecture Output Required:
+- ER diagram explanation
+- Firestore collection structure
+- Folder structure for Flutter project
+- Cloud Functions structure
+- Data flow explanation
+- Deployment guide
+
+The system should be scalable and production-ready.
