@@ -42,6 +42,14 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "firebaseApiKey": "AIzaSyC6jsRzdfxV_v7EaHsLjjRlXClmoDKQxNQ",                
+      "firebaseAuthDomain": "sirji-7f363.firebaseapp.com",
+      "firebaseProjectId": "sirji-7f363",
+      "firebaseStorageBucket": "sirji-7f363.firebasestorage.app",
+      "firebaseMessagingSenderId": "318642933882",
+      "firebaseAppId": "1:318642933882:web:551e4d6e32bec97ca66bc3"
     }
   }
 }

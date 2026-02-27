@@ -60,8 +60,7 @@ export default function Onboarding() {
           >
             <LinearGradient
               colors={selected === 'customer' ? ['rgba(37,99,235,0.25)', 'rgba(37,99,235,0.05)'] : ['transparent', 'transparent']}
-              style={StyleSheet.absoluteFill}
-              borderRadius={20}
+              style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
             />
             <View style={[styles.roleIcon, selected === 'customer' && { backgroundColor: colors.primary }]}>
               <Ionicons name="person" size={32} color={colors.white} />
@@ -85,8 +84,7 @@ export default function Onboarding() {
           >
             <LinearGradient
               colors={selected === 'provider' ? ['rgba(249,115,22,0.25)', 'rgba(249,115,22,0.05)'] : ['transparent', 'transparent']}
-              style={StyleSheet.absoluteFill}
-              borderRadius={20}
+              style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
             />
             <View style={[styles.roleIcon, { backgroundColor: selected === 'provider' ? colors.accent : colors.surface }, selected === 'provider' && { backgroundColor: colors.accent }]}>
               <Ionicons name="construct" size={32} color={colors.white} />
@@ -113,8 +111,7 @@ export default function Onboarding() {
           >
             <LinearGradient
               colors={selected ? [colors.primary, colors.primaryDark] : [colors.surface, colors.surface]}
-              style={StyleSheet.absoluteFill}
-              borderRadius={16}
+              style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
             />

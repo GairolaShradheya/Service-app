@@ -35,7 +35,14 @@ export default function ProviderProfile() {
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign Out', style: 'destructive', onPress: logout },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        },
+      },
     ]);
   };
 

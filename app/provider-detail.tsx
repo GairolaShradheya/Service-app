@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform,
 } from 'react-native';
@@ -8,13 +8,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { MOCK_PROVIDERS, MOCK_REVIEWS } from '@/constants/mockData';
+import { Provider, Review } from '@/constants/mockData';
 import { Avatar } from '@/components/Avatar';
 import { RatingStars } from '@/components/RatingStars';
 import { ServiceBadge } from '@/components/ServiceBadge';
 import { useAuth } from '@/context/AuthContext';
 import { useChat } from '@/context/ChatContext';
 import colors from '@/constants/colors';
+import { firestore } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 
 export default function ProviderDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -24,9 +26,48 @@ export default function ProviderDetail() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : insets.bottom;
 
-  const provider = MOCK_PROVIDERS.find((p) => p.id === id);
-  const reviews = MOCK_REVIEWS.filter((r) => r.id && r.providerId === id);
+  const [provider, setProvider] = useState<Provider | null>(null);
+  const [reviews, setReviews] = useState<Review[]>([]);
 
+  useEffect(() => {
+    if (!id) return;
+    (async () => {
+      const snap = await getDoc(doc(firestore, 'providers', id));
+      if (snap.exists()) {
+        const data = snap.data() as any;
+        const name: string = data.name || '';
+        setProvider({
+          id: snap.id,
+          name,
+          initials: name
+            .split(' ')
+            .map((w: string) => w[0])
+            .join('')
+            .toUpperCase(),
+          avatarColor: data.avatarColor || colors.primary,
+          serviceType: data.serviceType,
+          city: data.city,
+          experience: data.experience || 0,
+          rating: data.rating || 0,
+          reviewCount: data.reviewCount || 0,
+          pricePerHour: data.pricePerHour || 0,
+          available: data.available ?? false,
+          description: data.description || '',
+          skills: data.skills || [],
+          completedJobs: data.completedJobs || 0,
+          phone: data.phone || '',
+          distance: data.distance || 0,
+        });
+      }
+    })();
+
+    (async () => {
+      const q = query(collection(firestore, 'reviews'), where('providerId', '==', id));
+      const snap = await getDocs(q);
+      const arr: Review[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Review, 'id'>) }));
+      setReviews(arr);
+    })();
+  }, [id]);
   if (!provider) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
@@ -146,7 +187,12 @@ export default function ProviderDetail() {
           <Text style={styles.chatBtnText}>Chat</Text>
         </Pressable>
         <Pressable onPress={bookNow} style={({ pressed }) => [styles.bookBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}>
-          <LinearGradient colors={[colors.accent, '#C2410C']} style={StyleSheet.absoluteFill} borderRadius={16} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+          <LinearGradient
+            colors={[colors.accent, '#C2410C']}
+            style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
           <Ionicons name="calendar-outline" size={20} color={colors.white} />
           <Text style={styles.bookBtnText}>Book Now · ₹{provider.pricePerHour}/hr</Text>
         </Pressable>

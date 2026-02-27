@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, StyleSheet, TextInput, FlatList, Pressable,
   Platform, ScrollView,
@@ -8,10 +8,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { MOCK_PROVIDERS, Provider, CITIES } from '@/constants/mockData';
+import { Provider, CITIES } from '@/constants/mockData';
 import { ProviderCard } from '@/components/ProviderCard';
 import { useAuth } from '@/context/AuthContext';
 import colors from '@/constants/colors';
+import { firestore } from '@/lib/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
 
 type Filter = 'all' | 'plumber' | 'electrician';
 
@@ -22,8 +24,46 @@ export default function CustomerHome() {
   const [filter, setFilter] = useState<Filter>('all');
   const [selectedCity, setSelectedCity] = useState<string>(user?.city || 'Mumbai');
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [providers, setProviders] = useState<Provider[]>([]);
 
-  const filtered = MOCK_PROVIDERS.filter((p) => {
+  // subscribe to provider collection in Firestore
+  useEffect(() => {
+    const providersCol = collection(firestore, 'providers');
+    const q = query(providersCol);
+    const unsub = onSnapshot(q, (snap) => {
+      const arr = snap.docs.map((d) => {
+        const data = d.data() as any;
+        // compute missing fields with defaults
+        const name: string = data.name || '';
+        return {
+          id: d.id,
+          name,
+          initials: name
+            .split(' ')
+            .map((w: string) => w[0])
+            .join('')
+            .toUpperCase(),
+          avatarColor: data.avatarColor || colors.primary,
+          serviceType: data.serviceType as any,
+          city: data.city || '',
+          experience: data.experience || 0,
+          rating: data.rating || 0,
+          reviewCount: data.reviewCount || 0,
+          pricePerHour: data.pricePerHour || 0,
+          available: data.available ?? false,
+          description: data.description || '',
+          skills: data.skills || [],
+          completedJobs: data.completedJobs || 0,
+          phone: data.phone || '',
+          distance: data.distance || 0,
+        } as Provider;
+      });
+      setProviders(arr);
+    });
+    return unsub;
+  }, []);
+
+  const filtered = providers.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.skills.some((s) => s.toLowerCase().includes(search.toLowerCase()));
     const matchFilter = filter === 'all' || p.serviceType === filter;
