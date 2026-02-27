@@ -13,27 +13,53 @@ import { useAuth } from '@/context/AuthContext';
 import colors from '@/constants/colors';
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const insets = useSafeAreaInsets();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleLogin = async () => {
+    setError(null);
     if (!email.trim() || !password.trim()) {
-      Alert.alert('Missing fields', 'Please enter your email and password.');
+      setError('Please enter your email and password.');
       return;
     }
     setLoading(true);
+    let success = false;
     try {
+      console.debug('[Login] attempting signin', { email });
       await login(email.trim(), password);
+      success = true;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      console.debug('[Login] signin successful');
     } catch (e: any) {
-      Alert.alert('Login Failed', e.message);
+      console.warn('[Login] error', e);
+      // map common Firebase Auth error codes
+      let msg = e.message || 'Failed to sign in';
+      if (e.code === 'auth/user-not-found') {
+        msg = 'No account found with this email. Please sign up first.';
+      } else if (e.code === 'auth/wrong-password') {
+        msg = 'Incorrect password. Please try again.';
+      } else if (e.code === 'auth/invalid-email') {
+        msg = 'Please enter a valid email address.';
+      } else if (e.code === 'auth/too-many-requests') {
+        msg = 'Too many failed login attempts. Please try again later.';
+      }
+
+      setError(msg);
+      Alert.alert('Sign In Failed', msg);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setLoading(false);
+    }
+
+    // after successful login, user context is set. Route to dashboard based on role.
+    if (success && user) {
+      const dashboard = user.role === 'provider' ? '/(provider)' : '/(customer)';
+      router.replace(dashboard);
     }
   };
 
@@ -105,9 +131,16 @@ export default function Login() {
               disabled={loading}
               style={({ pressed }) => [styles.loginBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
             >
-              <LinearGradient colors={[colors.primary, colors.primaryDark]} style={StyleSheet.absoluteFill} borderRadius={14} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} />
+              <LinearGradient
+                colors={[colors.primary, colors.primaryDark]}
+                style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+              />
               <Text style={styles.loginBtnText}>{loading ? 'Signing in...' : 'Sign In'}</Text>
             </Pressable>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <View style={styles.divider}>
               <View style={styles.dividerLine} />
@@ -117,7 +150,10 @@ export default function Login() {
 
             <View style={styles.signupRow}>
               <Text style={styles.signupText}>Don't have an account?</Text>
-              <Pressable onPress={() => router.push('/onboarding')}>
+              <Pressable
+                onPress={() => router.push('/onboarding')}
+                style={styles.signupLinkContainer}
+              >
                 <Text style={styles.signupLink}>Sign up</Text>
               </Pressable>
             </View>
@@ -158,5 +194,7 @@ const styles = StyleSheet.create({
   dividerText: { fontSize: 13, color: colors.textTertiary, fontFamily: 'Poppins_400Regular' },
   signupRow: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
   signupText: { fontSize: 14, color: colors.textSecondary, fontFamily: 'Poppins_400Regular' },
+  signupLinkContainer: { paddingHorizontal: 4, paddingVertical: 2 },
   signupLink: { fontSize: 14, color: colors.primary, fontFamily: 'Poppins_600SemiBold' },
+  errorText: { color: colors.error || '#ff4444', fontSize: 13, textAlign: 'center', marginVertical: 8 },
 });

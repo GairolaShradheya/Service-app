@@ -34,7 +34,10 @@ export default function ProviderEarnings() {
 
       {/* Hero earnings card */}
       <View style={styles.heroCard}>
-        <LinearGradient colors={['#0F1E3D', '#1D4ED8']} style={StyleSheet.absoluteFill} borderRadius={20} />
+        <LinearGradient
+          colors={['#0F1E3D', '#1D4ED8']}
+          style={[StyleSheet.absoluteFill, { borderRadius: 20 }]}
+        />
         <View style={styles.heroTop}>
           <Text style={styles.heroLabel}>Total Earnings</Text>
           <View style={styles.heroIcon}>

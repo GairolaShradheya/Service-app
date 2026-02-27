@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable, Platform, Alert } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -18,9 +19,18 @@ const TAB_STATUSES: Record<TabFilter, BookingStatus[]> = {
 
 export default function CustomerBookings() {
   const { user } = useAuth();
-  const { getCustomerBookings } = useBookings();
+  const { getCustomerBookings, updateBookingStatus } = useBookings();
   const insets = useSafeAreaInsets();
   const [activeTab, setActiveTab] = useState<TabFilter>('upcoming');
+
+  const handleComplete = async (id: string) => {
+    try {
+      await updateBookingStatus(id, 'completed');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) {
+      Alert.alert('Error', e.message);
+    }
+  };
 
   const myBookings = getCustomerBookings(user?.id || '');
   const filtered = myBookings.filter((b) => TAB_STATUSES[activeTab].includes(b.status));
@@ -60,6 +70,14 @@ export default function CustomerBookings() {
         renderItem={({ item, index }) => (
           <Animated.View entering={FadeInDown.delay(index * 60).duration(400)}>
             <BookingCard booking={item} />
+            {activeTab === 'upcoming' && ['confirmed', 'ongoing'].includes(item.status) && (
+              <Pressable
+                onPress={() => handleComplete(item.id)}
+                style={styles.completeBtn}
+              >
+                <Text style={styles.completeBtnText}>Mark Completed</Text>
+              </Pressable>
+            )}
           </Animated.View>
         )}
         contentContainerStyle={styles.list}
@@ -102,4 +120,13 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingTop: 80, gap: 12 },
   emptyTitle: { fontSize: 18, color: colors.textPrimary, fontFamily: 'Poppins_600SemiBold' },
   emptyText: { fontSize: 14, color: colors.textSecondary, fontFamily: 'Poppins_400Regular', textAlign: 'center' },
+  completeBtn: {
+    marginHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  completeBtnText: { color: colors.white, fontFamily: 'Poppins_600SemiBold', fontSize: 14 },
 });

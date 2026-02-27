@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState ,useEffect} from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Pressable, Platform,
   TextInput, Alert, KeyboardAvoidingView,
@@ -8,11 +8,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { MOCK_PROVIDERS, TIME_SLOTS } from '@/constants/mockData';
-import { useBookings } from '@/context/BookingsContext';
+import { TIME_SLOTS } from '@/constants/mockData';
+import { Provider } from '@/constants/mockData';
+import { firestore } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';import { useBookings } from '@/context/BookingsContext';
 import { useAuth } from '@/context/AuthContext';
 import { Avatar } from '@/components/Avatar';
 import colors from '@/constants/colors';
+import RazorpayCheckout from 'react-native-razorpay';
 
 function getDates(count: number) {
   const dates: { label: string; dayName: string; full: string }[] = [];
@@ -36,8 +39,39 @@ export default function Booking() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
   const bottomInset = Platform.OS === 'web' ? 34 : insets.bottom;
 
-  const provider = MOCK_PROVIDERS.find((p) => p.id === id);
-  const dates = getDates(14);
+  const [provider, setProvider] = useState<Provider | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const snap = await getDoc(doc(firestore, 'providers', id));
+      if (snap.exists()) {
+        const data = snap.data() as any;
+        const name: string = data.name || '';
+        setProvider({
+          id: snap.id,
+          name,
+          initials: name
+            .split(' ')
+            .map((w: string) => w[0])
+            .join('')
+            .toUpperCase(),
+          avatarColor: data.avatarColor || colors.primary,
+          serviceType: data.serviceType,
+          city: data.city,
+          experience: data.experience || 0,
+          rating: data.rating || 0,
+          reviewCount: data.reviewCount || 0,
+          pricePerHour: data.pricePerHour || 0,
+          available: data.available ?? false,
+          description: data.description || '',
+          skills: data.skills || [],
+          completedJobs: data.completedJobs || 0,
+          phone: data.phone || '',
+          distance: data.distance || 0,
+        });
+      }
+    })();
+  }, [id]);  const dates = getDates(14);
 
   const [selectedDate, setSelectedDate] = useState(0);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
@@ -58,7 +92,27 @@ export default function Booking() {
 
     setLoading(true);
     try {
+      // first open razorpay checkout for payment
+      const amountPaise = Math.round(totalAmount * 100); // razorpay expects smallest unit
+      const options = {
+        description: 'Service booking fee',
+        image: 'https://i.imgur.com/3g7nmJC.png',
+        currency: 'INR',
+        key: '', // TODO: put your Razorpay API key here
+        amount: amountPaise.toString(),
+        name: provider.name,
+        prefill: {
+          email: user.email || '',
+          contact: user.phone || '',
+          name: user.name,
+        },
+        theme: { color: colors.primary },
+      } as any;
+
+      const paymentData = await RazorpayCheckout.open(options);
+      // if we reach here payment succeeded
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+
       await addBooking({
         providerId: provider.id,
         providerName: provider.name,
@@ -72,6 +126,7 @@ export default function Booking() {
         notes: notes.trim(),
         customerId: user.id,
         customerName: user.name,
+        paymentId: paymentData.razorpay_payment_id,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       Alert.alert(
@@ -80,7 +135,9 @@ export default function Booking() {
         [{ text: 'View Bookings', onPress: () => { router.dismissAll(); router.push('/(customer)/bookings'); } }]
       );
     } catch (e: any) {
-      Alert.alert('Error', e.message);
+      // if error originated from payment or booking
+      const msg = e.description || e.message || 'Unable to complete transaction';
+      Alert.alert('Payment Error', msg);
     } finally {
       setLoading(false);
     }
@@ -221,8 +278,9 @@ export default function Booking() {
           >
             <LinearGradient
               colors={selectedSlot ? [colors.accent, '#C2410C'] : [colors.surface, colors.surface]}
-              style={StyleSheet.absoluteFill} borderRadius={14}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
             />
             <Text style={[styles.ctaBtnText, !selectedSlot && { color: colors.textTertiary }]}>
               {loading ? 'Booking...' : 'Confirm Booking'}

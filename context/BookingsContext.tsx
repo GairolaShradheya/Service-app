@@ -1,5 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { firestore } from '@/lib/firebase';
+import {
+  collection,
+  addDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+  updateDoc,
+  onSnapshot,
+  orderBy,
+  serverTimestamp,
+  DocumentData,
+} from 'firebase/firestore';
 
 export type BookingStatus = 'pending' | 'confirmed' | 'ongoing' | 'completed' | 'cancelled';
 
@@ -18,6 +32,8 @@ export interface Booking {
   createdAt: string;
   customerId: string;
   customerName: string;
+  // optionally store the id returned by the payment gateway
+  paymentId?: string;
 }
 
 interface BookingsContextValue {
@@ -29,37 +45,38 @@ interface BookingsContextValue {
 }
 
 const BookingsContext = createContext<BookingsContextValue | null>(null);
-const STORAGE_KEY = 'fixit_bookings';
+// not using AsyncStorage; bookings stored in Firestore collection
+const BOOKINGS_COLLECTION = collection(firestore, 'bookings');
 
 export function BookingsProvider({ children }: { children: ReactNode }) {
   const [bookings, setBookings] = useState<Booking[]>([]);
 
+  // listen for realtime updates
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
-      if (stored) setBookings(JSON.parse(stored));
+    const q = query(BOOKINGS_COLLECTION, orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      const arr: Booking[] = snapshot.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<Booking, 'id'>),
+      }));
+      setBookings(arr);
     });
+    return unsub;
   }, []);
 
-  const save = async (updated: Booking[]) => {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    setBookings(updated);
-  };
-
   const addBooking = useCallback(async (data: Omit<Booking, 'id' | 'createdAt'>): Promise<Booking> => {
-    const booking: Booking = {
+    const docRef = await addDoc(BOOKINGS_COLLECTION, {
       ...data,
-      id: `booking_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-    };
-    const updated = [booking, ...bookings];
-    await save(updated);
+      createdAt: serverTimestamp(),
+    } as DocumentData);
+    const snap = await getDoc(docRef);
+    const booking: Booking = { id: docRef.id, ...(snap.data() as Omit<Booking, 'id'>) };
     return booking;
-  }, [bookings]);
+  }, []);
 
   const updateBookingStatus = useCallback(async (id: string, status: BookingStatus) => {
-    const updated = bookings.map((b) => (b.id === id ? { ...b, status } : b));
-    await save(updated);
-  }, [bookings]);
+    await updateDoc(doc(BOOKINGS_COLLECTION, id), { status });
+  }, []);
 
   const getProviderBookings = useCallback((providerId: string) =>
     bookings.filter((b) => b.providerId === providerId), [bookings]);

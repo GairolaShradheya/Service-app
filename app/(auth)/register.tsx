@@ -29,21 +29,29 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const isProvider = role === 'provider';
 
   const handleRegister = async () => {
+    setError(null);
     if (!name.trim() || !email.trim() || !password.trim() || !phone.trim()) {
-      Alert.alert('Missing fields', 'Please fill in all required fields.');
+      setError('Please fill in all required fields.');
       return;
     }
     if (isProvider && (!experience.trim() || !price.trim())) {
-      Alert.alert('Missing fields', 'Please fill in your experience and price per hour.');
+      setError('Please fill in your experience and price per hour.');
       return;
     }
+
+    console.debug('[Register] submitting', { name, email, phone, role, city });
+
     setLoading(true);
+    let success = false;
+    // React Native's setTimeout returns a number, not NodeJS.Timeout
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
-      await register({
+      const promise = register({
         name: name.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -62,12 +70,41 @@ export default function Register() {
           completedJobs: 0,
         } : {}),
       });
+
+      timeoutId = setTimeout(() => {
+        console.warn('[Register] still pending after 15s');
+        setError('Registration is taking longer than expected. Please check your connection.');
+      }, 15000);
+
+      await promise;
+
+      success = true;
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      console.debug('[Register] success');
     } catch (e: any) {
-      Alert.alert('Registration Failed', e.message);
+      console.warn('[Register] error', e);
+      // map some common Firebase Auth codes to user-friendly text
+      let msg = e.message || 'Failed to register';
+      if (e.code === 'auth/email-already-in-use') {
+        msg = 'This email address is already registered. Please sign in or use a different email.';
+      } else if (e.code === 'auth/invalid-email') {
+        msg = 'Please enter a valid email address.';
+      } else if (e.code === 'auth/weak-password') {
+        msg = 'Password is too weak. Please choose a stronger password.';
+      }
+
+      setError(msg);
+      Alert.alert('Registration Failed', msg);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
+      if (timeoutId) clearTimeout(timeoutId);
       setLoading(false);
+    }
+
+    if (success) {
+      // navigate directly to the appropriate dashboard
+      const dashboard = role === 'provider' ? '/(provider)' : '/(customer)';
+      router.replace(dashboard);
     }
   };
 
@@ -179,11 +216,14 @@ export default function Register() {
             >
               <LinearGradient
                 colors={isProvider ? [colors.accent, '#C2410C'] : [colors.primary, colors.primaryDark]}
-                style={StyleSheet.absoluteFill} borderRadius={14}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={[StyleSheet.absoluteFill, { borderRadius: 14 }]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
               />
               <Text style={styles.registerBtnText}>{loading ? 'Creating account...' : 'Create Account'}</Text>
             </Pressable>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
             <View style={styles.signupRow}>
               <Text style={styles.signupText}>Already have an account?</Text>
@@ -253,6 +293,7 @@ const styles = StyleSheet.create({
   signupRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingBottom: 20 },
   signupText: { fontSize: 14, color: colors.textSecondary, fontFamily: 'Poppins_400Regular' },
   signupLink: { fontSize: 14, color: colors.primary, fontFamily: 'Poppins_600SemiBold' },
+  errorText: { color: colors.error || '#ff4444', fontSize: 13, textAlign: 'center', marginVertical: 8 },
   cityPicker: {
     backgroundColor: colors.card, borderRadius: 12,
     borderWidth: 1, borderColor: colors.cardBorder, overflow: 'hidden',

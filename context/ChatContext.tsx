@@ -1,5 +1,19 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { firestore } from '@/lib/firebase';
+import {
+  collection,
+  addDoc,
+  doc,
+  getDoc,
+  updateDoc,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  limit,
+  serverTimestamp,
+  DocumentData,
+} from 'firebase/firestore';
 
 export interface Message {
   id: string;
@@ -31,42 +45,57 @@ interface ChatContextValue {
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
-const STORAGE_KEY = 'fixit_chats';
+// chats stored in Firestore collection
+const CHATS_COLLECTION = collection(firestore, 'chats');
 
 export function ChatProvider({ children }: { children: ReactNode }) {
   const [chats, setChats] = useState<Chat[]>([]);
 
+  // realtime listener for chat documents
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
-      if (stored) setChats(JSON.parse(stored));
+    const q = query(CHATS_COLLECTION, orderBy('lastTimestamp', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      const arr: Chat[] = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<Chat, 'id'>),
+      }));
+      setChats(arr);
     });
+    return unsub;
   }, []);
 
-  const save = async (updated: Chat[]) => {
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    setChats(updated);
-  };
-
-  const startOrGetChat = useCallback((
+  const startOrGetChat = useCallback(async (
     providerId: string, providerName: string, providerInitials: string, providerColor: string,
     customerId: string, customerName: string
-  ): Chat => {
-    const existing = chats.find((c) => c.providerId === providerId && c.customerId === customerId);
-    if (existing) return existing;
-    const newChat: Chat = {
-      id: `chat_${Date.now()}`,
-      providerId, providerName, providerInitials, providerColor,
-      customerId, customerName,
+  ): Promise<Chat> => {
+    // try to find existing chat via query
+    const q = query(
+      CHATS_COLLECTION,
+      where('providerId', '==', providerId),
+      where('customerId', '==', customerId),
+      limit(1),
+    );
+    const snap = await getDocs(q);
+    if (!snap.empty) {
+      const d = snap.docs[0];
+      return { id: d.id, ...(d.data() as Omit<Chat, 'id'>) };
+    }
+    const newDoc = await addDoc(CHATS_COLLECTION, {
+      providerId,
+      providerName,
+      providerInitials,
+      providerColor,
+      customerId,
+      customerName,
       lastMessage: '',
-      lastTimestamp: new Date().toISOString(),
+      lastTimestamp: serverTimestamp(),
       unreadCount: 0,
       messages: [],
-    };
-    const updated = [newChat, ...chats];
-    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-    setChats(updated);
-    return newChat;
-  }, [chats]);
+    } as DocumentData);
+    const d = await getDoc(newDoc);
+    const chat: Chat = { id: newDoc.id, ...(d.data() as Omit<Chat, 'id'>) };
+    return chat;
+  }, []);
 
   const sendMessage = useCallback(async (chatId: string, senderId: string, text: string) => {
     const msg: Message = {
@@ -75,54 +104,34 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       text,
       timestamp: new Date().toISOString(),
     };
-    const updated = chats.map((c) => {
-      if (c.id !== chatId) return c;
-      return {
-        ...c,
-        messages: [...c.messages, msg],
-        lastMessage: text,
-        lastTimestamp: msg.timestamp,
-        unreadCount: c.unreadCount + 1,
-      };
+    // push message array locally
+    const chatRef = doc(CHATS_COLLECTION, chatId);
+    await updateDoc(chatRef, {
+      messages: [...(chats.find((c) => c.id === chatId)?.messages || []), msg],
+      lastMessage: text,
+      lastTimestamp: msg.timestamp,
+      unreadCount: (chats.find((c) => c.id === chatId)?.unreadCount || 0) + 1,
     });
-    await save(updated);
 
-    // Simulate provider reply after 2 seconds
-    const replies = [
-      'Sure, I can help with that!',
-      'I will be there on time.',
-      'Thank you for reaching out.',
-      'Can you share more details?',
-      'I am available at the scheduled time.',
-      'The work will be done efficiently.',
-    ];
+    // provider reply simulation could remain local or push to firestore
     setTimeout(async () => {
       const reply: Message = {
         id: `msg_${Date.now()}_reply`,
         senderId: 'provider',
-        text: replies[Math.floor(Math.random() * replies.length)],
+        text: 'This is an automated response.',
         timestamp: new Date().toISOString(),
       };
-      setChats((prev) => {
-        const withReply = prev.map((c) => {
-          if (c.id !== chatId) return c;
-          return {
-            ...c,
-            messages: [...c.messages, reply],
-            lastMessage: reply.text,
-            lastTimestamp: reply.timestamp,
-          };
-        });
-        AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(withReply));
-        return withReply;
+      await updateDoc(chatRef, {
+        messages: [...(chats.find((c) => c.id === chatId)?.messages || []), msg, reply],
+        lastMessage: reply.text,
+        lastTimestamp: reply.timestamp,
       });
     }, 2000);
   }, [chats]);
 
   const markAsRead = useCallback(async (chatId: string) => {
-    const updated = chats.map((c) => c.id === chatId ? { ...c, unreadCount: 0 } : c);
-    await save(updated);
-  }, [chats]);
+    await updateDoc(doc(CHATS_COLLECTION, chatId), { unreadCount: 0 });
+  }, []);
 
   const getChatById = useCallback((chatId: string) => chats.find((c) => c.id === chatId), [chats]);
 
